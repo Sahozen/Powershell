@@ -11,8 +11,16 @@ function New-RandomPassword {
     return $password
 }
 
-# Indiquez le chemin vers votre fichier CSV
+# Chemin complet du fichier CSV contenant les informations des utilisateurs
 $cheminCsv = "O:\Direction\RH\ImportationRH\Testimportation.csv"
+
+# Chemin du fichier de log pour enregistrer les login et mot de passe
+$logFile = "O:\Direction\RH\ImportationRH\UserCreationLog.txt"
+
+# Si le fichier log existe déjà, on le supprime pour repartir d'un log vierge
+if (Test-Path $logFile) {
+    Remove-Item $logFile
+}
 
 # Importation du fichier CSV
 $utilisateurs = Import-Csv -Path $cheminCsv
@@ -22,11 +30,18 @@ $ouBase = "OU=Utilisateurs,DC=alphatech,DC=local"
 
 foreach ($utilisateur in $utilisateurs) {
     try {
+        # Vérifier si l'utilisateur existe déjà en recherchant par SamAccountName
+        $existingUser = Get-ADUser -Filter { SamAccountName -eq $($utilisateur.SamAccountName) } -SearchBase $ouBase -ErrorAction SilentlyContinue
+        if ($existingUser) {
+            Write-Host "L'utilisateur '$($utilisateur.Name)' existe déjà." -ForegroundColor Yellow
+            continue
+        }
+        
         # Génération d'un mot de passe aléatoire
         $passwordPlain = New-RandomPassword -length 16
         $motDePasse = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
         
-        # Création du compte utilisateur
+        # Création du compte utilisateur dans l'Active Directory
         New-ADUser `
             -Name $utilisateur.Name `
             -DisplayName $utilisateur.DisplayName `
@@ -56,11 +71,15 @@ foreach ($utilisateur in $utilisateurs) {
         # Ajouter l'utilisateur au groupe correspondant à son service
         Add-ADGroupMember -Identity $utilisateur.Department -Members $utilisateur.SamAccountName
         Write-Host "Ajout au groupe '$($utilisateur.Department)' effectué." -ForegroundColor Green
+
+        # Enregistrement dans le fichier log
+        $logEntry = "Login: $($utilisateur.SamAccountName) - Mot de passe: $passwordPlain"
+        Add-Content -Path $logFile -Value $logEntry
     }
     catch {
         Write-Error "Erreur pour l'utilisateur '$($utilisateur.Name)' : $_"
     }
     
-    # Petite pause (optionnelle) pour éviter d'éventuels conflits/latences
+    # Petite pause pour éviter d'éventuels conflits/latences
     Start-Sleep -Seconds 1
 }
