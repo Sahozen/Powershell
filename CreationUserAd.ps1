@@ -12,7 +12,7 @@ function New-RandomPassword {
 }
 
 # Chemin complet du fichier CSV contenant les informations des utilisateurs
-$cheminCsv = "O:\Direction\RH\ImportationRH\ImportationR&D.csv"
+$cheminCsv = "O:\Direction\RH\ImportationRH\Testimportation.csv"
 
 # Chemin du fichier de log pour enregistrer les login et mot de passe
 $logFile = "O:\Direction\RH\ImportationRH\UserCreationLog.txt"
