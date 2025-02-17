@@ -11,54 +11,56 @@ function New-RandomPassword {
     return $password
 }
 
-# Chemin complet du fichier CSV contenant les informations des utilisateurs
-$cheminCsv = "O:\Direction\RH\ImportationRH\Testimportation.csv"
+# Indiquez le chemin vers votre fichier CSV
+$cheminCsv = "C:\Import\Testimportation.csv"
 
 # Importation du fichier CSV
 $utilisateurs = Import-Csv -Path $cheminCsv
 
-# Parcours de chaque utilisateur du CSV
+# OU de destination dans l'AD
+$ouBase = "OU=Utilisateurs,DC=alphatech,DC=local"
+
 foreach ($utilisateur in $utilisateurs) {
     try {
-        # Récupération des champs depuis le CSV
-        $prenom = $utilisateur.GivenName.Trim()
-        $nom = $utilisateur.Surname.Trim()
-        $sam = $utilisateur.SamAccountName.Trim()
-        $service = $utilisateur.Department.Trim()
-        
-        # Pour l'email, si la colonne s'appelle EmailAddress dans le CSV
-        $email = $utilisateur.EmailAddress.ToLower()
-
-        # Génération d'un mot de passe aléatoire de 16 caractères
+        # Génération d'un mot de passe aléatoire
         $passwordPlain = New-RandomPassword -length 16
         $motDePasse = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
         
-        # Définition de l'OU de destination (à adapter selon votre AD)
-        $cheminOU = "OU=Utilisateurs,DC=alphatech,DC=local"
-
-        # Création du compte utilisateur dans l'Active Directory
+        # Création du compte utilisateur
         New-ADUser `
-            -Name "$prenom $nom" `
-            -GivenName $prenom `
-            -Surname $nom `
-            -SamAccountName $sam `
-            -UserPrincipalName $email `
+            -Name $utilisateur.Name `
+            -DisplayName $utilisateur.DisplayName `
+            -GivenName $utilisateur.GivenName `
+            -Surname $utilisateur.Surname `
+            -SamAccountName $utilisateur.SamAccountName `
+            -UserPrincipalName $utilisateur.UserPrincipalName `
+            -EmailAddress $utilisateur.EmailAddress `
+            -Department $utilisateur.Department `
+            -Title $utilisateur.Title `
+            -OfficePhone $utilisateur.TelephoneNumber `
+            -StreetAddress $utilisateur.StreetAddress `
+            -POBox $utilisateur.POBox `
+            -PostalCode $utilisateur.PostalCode `
+            -State $utilisateur.StateOrProvince `
+            -Country $utilisateur.Country `
             -AccountPassword $motDePasse `
             -Enabled $true `
-            -EmailAddress $email `
             -ChangePasswordAtLogon $true `
-            -Path $cheminOU
-
-        # Confirmation de la création du compte
-        Write-Host "L'utilisateur '$prenom $nom' a été créé avec succès." -ForegroundColor Green
-        Write-Host "  -> Login : $sam" -ForegroundColor Green
+            -Path $ouBase `
+            -Description "Utilisateur importé par script CSV - $($utilisateur.Title), $($utilisateur.Department)"
+        
+        Write-Host "Création réussie : $($utilisateur.Name)" -ForegroundColor Green
+        Write-Host "  -> Login : $($utilisateur.SamAccountName)" -ForegroundColor Green
         Write-Host "  -> Mot de passe initial : $passwordPlain" -ForegroundColor Green
-
-        # Affectation de l'utilisateur à un groupe correspondant à son service
-        Add-ADGroupMember -Identity $service -Members $sam
-        Write-Host "L'utilisateur '$prenom $nom' a été ajouté au groupe '$service'." -ForegroundColor Green
+        
+        # Ajouter l'utilisateur au groupe correspondant à son service
+        Add-ADGroupMember -Identity $utilisateur.Department -Members $utilisateur.SamAccountName
+        Write-Host "Ajout au groupe '$($utilisateur.Department)' effectué." -ForegroundColor Green
     }
     catch {
-        Write-Error "Erreur lors de la création ou de l'affectation de l'utilisateur '$($utilisateur.SamAccountName)' : $_"
+        Write-Error "Erreur pour l'utilisateur '$($utilisateur.Name)' : $_"
     }
+    
+    # Petite pause (optionnelle) pour éviter d'éventuels conflits/latences
+    Start-Sleep -Seconds 1
 }
