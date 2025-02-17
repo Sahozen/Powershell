@@ -12,7 +12,7 @@ function New-RandomPassword {
 }
 
 # Indiquez le chemin vers votre fichier CSV
-$cheminCsv = "C:\Import\Testimportation.csv"
+$cheminCsv = "‪O:\Direction\RH\ImportationRH\Testimportation.csv"
 
 # Importation du fichier CSV
 $utilisateurs = Import-Csv -Path $cheminCsv
