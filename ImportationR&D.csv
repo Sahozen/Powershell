@@ -1,0 +1,5 @@
+Name,DisplayName,GivenName,Surname,SamAccountName,UserPrincipalName,EmailAddress,Department,Title,TelephoneNumber,StreetAddress,POBox,PostalCode,StateOrProvince,Country,FullName,Initials
+"Barry Allen","ALLEN Barry","Barry","Allen","barry.allen","barry.allen@alphatech.local","barry.allen@alphatech.local","R&D","Ingénieur Recherche","+33 6 33 44 55 66","8 Rue de la Vitesse, Lyon","Boîte 5","69002","Auvergne-Rhône-Alpes","FR","Barry Allen","BA"
+"Ray Palmer","PALMER Ray","Ray","Palmer","ray.palmer","ray.palmer@alphatech.local","ray.palmer@alphatech.local","R&D","Chercheur en Technologies Avancées","+33 6 44 55 66 77","12 Avenue de l'Innovation, Lyon","Boîte 6","69003","Auvergne-Rhône-Alpes","FR","Ray Palmer","RP"
+
+  
