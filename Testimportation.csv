@@ -1,1 +1,7 @@
+Name,DisplayName,GivenName,Surname,SamAccountName,UserPrincipalName,EmailAddress,Department,Title,TelephoneNumber,StreetAddress,POBox,PostalCode,StateOrProvince,Country,FullName,Initials
+"Thomas Kireche","KIRECHE Thomas","Thomas","Kireche","thomas.kireche","thomas.kireche@alphatech.local","thomas.kireche@alphatech.local","IT","Chef de projet en infrastructure cloud","+33 7 56 43 89 10","15 Rue du Gros Horloge, Rouen","Boîte 17","76000","Seine-Maritime","FR","Thomas Kireche","TK"
+"Anna Smith","SMITH Anna","Anna","Smith","anna.smith","anna.smith@alphatech.local","anna.smith@alphatech.local","R&D","Ingénieure en robotique","+33 6 11 22 33 44","10 Avenue de l'Opéra, Paris","Boîte 2","75001","Paris","FR","Anna Smith","AS"
+"Jean Dupont","DUPONT Jean","Jean","Dupont","jean.dupont","jean.dupont@alphatech.local","jean.dupont@alphatech.local","Direction","Directeur général","+33 7 77 88 99 00","3 Rue de la République, Lyon","Boîte 3","69001","Rhône","FR","Jean Dupont","JD"
+"Sophie Durand","DURAND Sophie","Sophie","Durand","sophie.durand","sophie.durand@alphatech.local","sophie.durand@alphatech.local","Commerciaux","Responsable des ventes","+33 6 44 55 66 77","25 Boulevard Victor Hugo, Marseille","Boîte 4","13001","Bouches-du-Rhône","FR","Sophie Durand","SD"
+"Pierre Martin","MARTIN Pierre","Pierre","Martin","pierre.martin","pierre.martin@alphatech.local","pierre.martin@alphatech.local","Production","Technicien de production","+33 7 98 76 54 32","12 Place Stanislas, Nancy","Boîte 5","54000","Meurthe-et-Moselle","FR","Pierre Martin","PM"
 
