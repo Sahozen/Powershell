@@ -1,0 +1,3 @@
+Name,DisplayName,GivenName,Surname,SamAccountName,UserPrincipalName,EmailAddress,Department,Title,TelephoneNumber,StreetAddress,POBox,PostalCode,StateOrProvince,Country,FullName,Initials
+"Bruce Wayne","WAYNE Bruce","Bruce","Wayne","bruce.wayne","bruce.wayne@alphatech.local","bruce.wayne@alphatech.local","Direction","Directeur Général","+33 7 55 44 33 22","100 Boulevard des Rêves, Paris","Boîte 1","75008","Île-de-France","FR","Bruce Wayne","BW"
+"Diana Prince","PRINCE Diana","Diana","Prince","diana.prince","diana.prince@alphatech.local","diana.prince@alphatech.local","Direction","Directrice Exécutive","+33 7 66 55 44 33","55 Avenue de la Paix, Paris","Boîte 2","75009","Île-de-France","FR","Diana Prince","DP"
