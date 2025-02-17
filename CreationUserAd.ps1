@@ -12,7 +12,7 @@ function New-RandomPassword {
 }
 
 # Chemin complet du fichier CSV contenant les informations des utilisateurs
-$cheminCsv = "O:\Direction\RH\ImportationRH\Testimportation.csv "
+$cheminCsv = "O:\Direction\RH\ImportationRH\Testimportation.csv"
 
 # Importation du fichier CSV
 $utilisateurs = Import-Csv -Path $cheminCsv
@@ -20,11 +20,14 @@ $utilisateurs = Import-Csv -Path $cheminCsv
 # Parcours de chaque utilisateur du CSV
 foreach ($utilisateur in $utilisateurs) {
     try {
-        # Création du nom complet et de l'adresse e-mail
-        $prenom = $utilisateur.FirstName.Trim()
-        $nom = $utilisateur.LastName.Trim()
-        $nomComplet = "$prenom $nom"
-        $email = "$prenom.$nom@alphatech.local".ToLower()
+        # Récupération des champs depuis le CSV
+        $prenom = $utilisateur.GivenName.Trim()
+        $nom = $utilisateur.Surname.Trim()
+        $sam = $utilisateur.SamAccountName.Trim()
+        $service = $utilisateur.Department.Trim()
+        
+        # Pour l'email, si la colonne s'appelle EmailAddress dans le CSV
+        $email = $utilisateur.EmailAddress.ToLower()
 
         # Génération d'un mot de passe aléatoire de 16 caractères
         $passwordPlain = New-RandomPassword -length 16
@@ -35,10 +38,10 @@ foreach ($utilisateur in $utilisateurs) {
 
         # Création du compte utilisateur dans l'Active Directory
         New-ADUser `
-            -Name $nomComplet `
+            -Name "$prenom $nom" `
             -GivenName $prenom `
             -Surname $nom `
-            -SamAccountName $utilisateur.Username `
+            -SamAccountName $sam `
             -UserPrincipalName $email `
             -AccountPassword $motDePasse `
             -Enabled $true `
@@ -47,16 +50,15 @@ foreach ($utilisateur in $utilisateurs) {
             -Path $cheminOU
 
         # Confirmation de la création du compte
-        Write-Host "L'utilisateur '$nomComplet' a été créé avec succès." -ForegroundColor Green
-        Write-Host "  -> Login : $($utilisateur.Username)" -ForegroundColor Green
+        Write-Host "L'utilisateur '$prenom $nom' a été créé avec succès." -ForegroundColor Green
+        Write-Host "  -> Login : $sam" -ForegroundColor Green
         Write-Host "  -> Mot de passe initial : $passwordPlain" -ForegroundColor Green
 
         # Affectation de l'utilisateur à un groupe correspondant à son service
-        $nomGroupe = $utilisateur.Service.Trim()
-        Add-ADGroupMember -Identity $nomGroupe -Members $utilisateur.Username
-        Write-Host "L'utilisateur '$nomComplet' a été ajouté au groupe '$nomGroupe'." -ForegroundColor Green
+        Add-ADGroupMember -Identity $service -Members $sam
+        Write-Host "L'utilisateur '$prenom $nom' a été ajouté au groupe '$service'." -ForegroundColor Green
     }
     catch {
-        Write-Error "Erreur lors de la création ou de l'affectation de l'utilisateur '$nomComplet' : $_"
+        Write-Error "Erreur lors de la création ou de l'affectation de l'utilisateur '$($utilisateur.SamAccountName)' : $_"
     }
-} 
+}
