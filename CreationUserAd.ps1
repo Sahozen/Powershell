@@ -12,7 +12,7 @@ function New-RandomPassword {
 }
 
 # Chemin complet du fichier CSV contenant les informations des utilisateurs
-$cheminCsv = "O:\chemin\vers\nouveaux_utilisateurs.csv"
+$cheminCsv = "O:\Direction\RH\ImportationRH\Testimportation.csv "
 
 # Importation du fichier CSV
 $utilisateurs = Import-Csv -Path $cheminCsv
@@ -59,4 +59,4 @@ foreach ($utilisateur in $utilisateurs) {
     catch {
         Write-Error "Erreur lors de la création ou de l'affectation de l'utilisateur '$nomComplet' : $_"
     }
-}
+} 
