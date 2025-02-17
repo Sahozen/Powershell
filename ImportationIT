@@ -1,0 +1,3 @@
+Name,DisplayName,GivenName,Surname,SamAccountName,UserPrincipalName,EmailAddress,Department,Title,TelephoneNumber,StreetAddress,POBox,PostalCode,StateOrProvince,Country,FullName,Initials
+"Victor Stone","STONE Victor","Victor","Stone","victor.stone","victor.stone@alphatech.local","victor.stone@alphatech.local","IT","Technicien Informatique","+33 6 12 34 56 78","15 Rue de la Justice, Paris","Boîte 10","75009","Île-de-France","FR","Victor Stone","VS"
+"Barbara Gordon","GORDON Barbara","Barbara","Gordon","barbara.gordon","barbara.gordon@alphatech.local","barbara.gordon@alphatech.local","IT","Spécialiste Réseaux","+33 6 98 76 54 32","22 Rue de l'Oracle, Paris","Boîte 11","75011","Île-de-France","FR","Barbara Gordon","BG"
