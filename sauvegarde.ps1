@@ -1,12 +1,35 @@
-# -- Encodage UTF-8 pour gérer les accents --
-[System.Text.Encoding]::RegisterProvider([System.Text.CodePagesEncodingProvider]::Instance)
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+<#
+.SYNOPSIS
+  Script de sauvegarde compressée avec limitation à 10 sauvegardes.
+
+.DESCRIPTION
+  - Sauvegarde le dossier source vers un dossier de destination en ZIP.
+  - Nomme l’archive avec la date et l’heure (format "yyyy-MM-dd_HH-mm").
+  - Conserve uniquement les 10 plus récentes sauvegardes.
+  - Écrit des logs dans un fichier dédié.
+  - Peut être exécuté en mode silencieux (sans boîtes de dialogue).
+
+.PARAMETER Silent
+  Lance la sauvegarde en mode silencieux (pas de boîtes de dialogue).
+#>
+
+# ------------- GESTION DE L'ENCODAGE (Optionnel) -------------
+# Si tu as une erreur sur CodePagesEncodingProvider, commente ou supprime ces lignes :
+try {
+    [System.Text.Encoding]::RegisterProvider([System.Text.CodePagesEncodingProvider]::Instance)
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
+} catch {
+    # Simplement ignorer si la version de .NET/PowerShell ne supporte pas
+    Write-Host "Encodage UTF-8 non configuré (version de .NET insuffisante ?) : $($_.Exception.Message)"
+}
+# --------------------------------------------------------------
 
 param(
-    [switch]$Silent  # Si -Silent est spécifié, on n'affiche pas de boîtes de dialogue
+    [switch]$Silent  # Si -Silent est spécifié, pas de boîtes de dialogue
 )
 
+# Pour les boîtes de dialogue Windows
 Add-Type -AssemblyName System.Windows.Forms
 
 # Fichier de log
@@ -18,7 +41,9 @@ function Write-Log($message) {
     Add-Content -Path $logFile -Value "$timestamp $message"
 }
 
-# Mode manuel : on demande confirmation par boîte de dialogue
+# -------------------------------------------------------------------------------------
+# 1. Si on n’est pas en mode silencieux, on affiche une boîte de dialogue de confirmation
+# -------------------------------------------------------------------------------------
 if (-not $Silent) {
     $confirmation = [System.Windows.Forms.MessageBox]::Show(
         "Voulez-vous lancer la sauvegarde ?",
@@ -29,37 +54,57 @@ if (-not $Silent) {
 
     if ($confirmation -eq [System.Windows.Forms.DialogResult]::No) {
         Write-Host "Sauvegarde annulée par l'utilisateur."
-        Write-Log "Sauvegarde annulée par l'utilisateur."
+        Write-Log  "Sauvegarde annulée par l'utilisateur."
         exit
     }
     Write-Host "Sauvegarde confirmée par l'utilisateur."
     Write-Log  "Sauvegarde confirmée par l'utilisateur."
 }
 else {
-    # Mode silencieux
     Write-Host "Sauvegarde lancée en mode silencieux (WSL/Automatique)."
     Write-Log  "Sauvegarde lancée en mode silencieux (WSL/Automatique)."
 }
 
-# Définition des chemins
+# -------------------------------------------------------------------------------------
+# 2. Paramètres de la sauvegarde
+# -------------------------------------------------------------------------------------
 $source      = "\\alphatech.local\data\partage"
 $destination = "\\10.11.11.201\recovery"
-$date        = Get-Date -Format "yyyy-MM-dd"  # ex: 2025-02-19
+# On ajoute HH-mm (heure-minute) au format
+$date        = Get-Date -Format "yyyy-MM-dd_HH-mm"
 $backupName  = "backup_$date.zip"
 $backupPath  = Join-Path $destination $backupName
 
-# Création de la sauvegarde
 Write-Host "Démarrage de la sauvegarde..."
 Write-Log  "Démarrage de la sauvegarde..."
 
+# -------------------------------------------------------------------------------------
+# 3. Création de l’archive ZIP + Limitation du nombre de sauvegardes
+# -------------------------------------------------------------------------------------
 try {
-    # 1) Créer l’archive ZIP
+    # a) Création de l’archive ZIP
     Compress-Archive -Path "$source\*" -DestinationPath $backupPath -Force
 
-    # 2) Vérifier la création
+    # b) Vérification de la création
     if (Test-Path $backupPath) {
         Write-Host "Sauvegarde créée : $backupPath"
         Write-Log  "Sauvegarde créée : $backupPath"
+
+        # c) Limiter à 10 sauvegardes
+        $allBackups = Get-ChildItem -Path $destination -Filter "backup_*.zip" -File |
+                      Sort-Object LastWriteTime -Descending
+
+        if ($allBackups.Count -gt 10) {
+            # On conserve les 10 plus récentes, on supprime le reste
+            $toRemove = $allBackups | Select-Object -Skip 10
+            foreach ($old in $toRemove) {
+                Write-Host "Suppression de l'ancienne sauvegarde : $($old.Name)"
+                Write-Log  "Suppression de l'ancienne sauvegarde : $($old.FullName)"
+                Remove-Item $old.FullName -Force
+            }
+        }
+
+        # d) Message de succès si pas en mode silencieux
         if (-not $Silent) {
             [System.Windows.Forms.MessageBox]::Show(
                 "Sauvegarde terminée avec succès !",
@@ -72,25 +117,12 @@ try {
     else {
         throw "Le fichier de sauvegarde n'a pas été créé."
     }
-
-    # 3) Limiter à 10 sauvegardes
-    $allBackups = Get-ChildItem -Path $destination -Filter "backup_*.zip" -File `
-                  | Sort-Object LastWriteTime -Descending
-
-    if ($allBackups.Count -gt 10) {
-        # On conserve les 10 plus récentes, on supprime le reste
-        $toRemove = $allBackups | Select-Object -Skip 10
-        foreach ($old in $toRemove) {
-            Write-Host "Suppression de l'ancienne sauvegarde : $($old.Name)"
-            Write-Log  "Suppression de l'ancienne sauvegarde : $($old.FullName)"
-            Remove-Item $old.FullName -Force
-        }
-    }
 }
 catch {
     $errMsg = "Échec de la sauvegarde : $($_.Exception.Message)"
     Write-Host $errMsg
     Write-Log  $errMsg
+
     if (-not $Silent) {
         [System.Windows.Forms.MessageBox]::Show(
             $errMsg,
