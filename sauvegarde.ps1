@@ -12,7 +12,15 @@
 .PARAMETER Silent
   Lance la sauvegarde en mode silencieux (pas de boîtes de dialogue).
 #>
+# Sauvegarde ce fichier en UTF-8 (avec BOM)
+Add-Type -AssemblyName System.Windows.Forms
 
+[System.Windows.Forms.MessageBox]::Show(
+    "Échec ou Succès ? Vérifiez les accents : é, è, à, ù.",
+    "Test Accents",
+    [System.Windows.Forms.MessageBoxButtons]::OK,
+    [System.Windows.Forms.MessageBoxIcon]::Information
+)
 # ------------- GESTION DE L'ENCODAGE (Optionnel) -------------
 # Si tu as une erreur sur CodePagesEncodingProvider, commente ou supprime ces lignes :
 try {
