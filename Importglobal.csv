@@ -1,0 +1,9 @@
+Name,DisplayName,GivenName,Surname,SamAccountName,UserPrincipalName,EmailAddress,Department,Title,TelephoneNumber,StreetAddress,POBox,PostalCode,StateOrProvince,Country,FullName,Initials
+"Bruce Wayne","WAYNE Bruce","Bruce","Wayne","bruce.wayne","bruce.wayne@alphatech.local","bruce.wayne@alphatech.local","Direction","Directeur Général","+33 7 55 44 33 22","100 Boulevard des Rêves, Paris","Boîte 1","75008","Île-de-France","FR","Bruce Wayne","BW"
+"Diana Prince","PRINCE Diana","Diana","Prince","diana.prince","diana.prince@alphatech.local","diana.prince@alphatech.local","Direction","Directrice Exécutive","+33 7 66 55 44 33","55 Avenue de la Paix, Paris","Boîte 2","75009","Île-de-France","FR","Diana Prince","DP"
+"Victor Stone","STONE Victor","Victor","Stone","victor.stone","victor.stone@alphatech.local","victor.stone@alphatech.local","IT","Technicien Informatique","+33 6 12 34 56 78","15 Rue de la Justice, Paris","Boîte 10","75009","Île-de-France","FR","Victor Stone","VS"
+"Barbara Gordon","GORDON Barbara","Barbara","Gordon","barbara.gordon","barbara.gordon@alphatech.local","barbara.gordon@alphatech.local","IT","Spécialiste Réseaux","+33 6 98 76 54 32","22 Rue de l'Oracle, Paris","Boîte 11","75011","Île-de-France","FR","Barbara Gordon","BG"
+"Barry Allen","ALLEN Barry","Barry","Allen","barry.allen","barry.allen@alphatech.local","barry.allen@alphatech.local","R&D","Ingénieur Recherche","+33 6 33 44 55 66","8 Rue de la Vitesse, Lyon","Boîte 5","69002","Auvergne-Rhône-Alpes","FR","Barry Allen","BA"
+"Ray Palmer","PALMER Ray","Ray","Palmer","ray.palmer","ray.palmer@alphatech.local","ray.palmer@alphatech.local","R&D","Chercheur en Technologies Avancées","+33 6 44 55 66 77","12 Avenue de l'Innovation, Lyon","Boîte 6","69003","Auvergne-Rhône-Alpes","FR","Ray Palmer","RP"
+
+  
