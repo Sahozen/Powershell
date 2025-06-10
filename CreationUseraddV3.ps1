@@ -205,7 +205,7 @@ function Import-AdUsers {
     }
 
     $sw.Stop()
-    Write-Host "\nTraitement terminé en $([Math]::Round($sw.Elapsed.TotalSeconds, 2)) s – consultez : `n -> $LogFile" -ForegroundColor Green
+   Write-Host ("Traitement terminé en {0}s – consultez :`n -> {1}" -f ([math]::Round($sw.Elapsed.TotalSeconds,2)), $LogFile) -ForegroundColor Green
 }
 
 # =====================  MAIN  ======================================
