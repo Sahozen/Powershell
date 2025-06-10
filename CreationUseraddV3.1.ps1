@@ -83,59 +83,61 @@ if ($grp) {
 
 foreach ($utilisateur in $utilisateurs) {
     try {
-        # Vérifier si l'utilisateur existe déjà
-        $existingUser = Get-ADUser -Filter "SamAccountName -eq '$($utilisateur.SamAccountName)'" `
-                                   -SearchBase $ouBase `
-                                   -SearchScope Subtree `
-                                   -ErrorAction SilentlyContinue
+        # --- Variables locales ---
+        $sam = $utilisateur.SamAccountName.Trim()
+        $expirationDate = (Get-Date).AddYears(1)
 
+        # --- L'utilisateur existe déjà ? ---
+        $existingUser = Get-ADUser -Filter "SamAccountName -eq '$sam'" -ErrorAction SilentlyContinue
         if ($existingUser) {
-            Write-Host "L'utilisateur '$($utilisateur.Name)' existe déjà (SamAccountName = $($utilisateur.SamAccountName))." -ForegroundColor Yellow
+            Write-Host "L'utilisateur '$($utilisateur.Name)' existe déjà (SamAccountName = $sam)." -ForegroundColor Green
             continue
         }
 
-        # Génération d'un mot de passe aléatoire
-        $passwordPlain = New-RandomPassword -length 16
-        $motDePasse = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
+        # --- Paramètres de création ---
+        $params = @{
+            Name                  = $utilisateur.Name
+            DisplayName           = $utilisateur.DisplayName
+            GivenName             = $utilisateur.GivenName
+            Surname               = $utilisateur.Surname
+            SamAccountName        = $sam
+            UserPrincipalName     = $utilisateur.UserPrincipalName
+            EmailAddress          = $utilisateur.EmailAddress
+            Department            = $utilisateur.Department
+            Title                 = $utilisateur.Title
+            OfficePhone           = $utilisateur.TelephoneNumber
+            StreetAddress         = $utilisateur.StreetAddress
+            POBox                 = $utilisateur.POBox
+            PostalCode            = $utilisateur.PostalCode
+            State                 = $utilisateur.StateOrProvince
+            Country               = $utilisateur.Country
+            AccountPassword       = $motDePasse
+            Enabled               = $true
+            ChangePasswordAtLogon = $true
+            AccountExpirationDate = $expirationDate
+            Path                  = $ouBase
+            Description           = "Poste : $($utilisateur.Title) | Service : $($utilisateur.Department) | Import CSV $(Get-Date -Format 'd')"
+        }
 
-        # Création du compte utilisateur dans l'Active Directory
-       $params = @{
-            Name                   = $utilisateur.Name
-            DisplayName            = $utilisateur.DisplayName
-            GivenName              = $utilisateur.GivenName
-            Surname                = $utilisateur.Surname
-            SamAccountName         = $sam
-            UserPrincipalName      = $utilisateur.UserPrincipalName
-            EmailAddress           = $utilisateur.EmailAddress
-            Department             = $utilisateur.Department
-            Title                  = $utilisateur.Title
-            OfficePhone            = $utilisateur.TelephoneNumber
-            StreetAddress          = $utilisateur.StreetAddress
-            POBox                  = $utilisateur.POBox
-            PostalCode             = $utilisateur.PostalCode
-            State                  = $utilisateur.StateOrProvince
-            Country                = $utilisateur.Country
-            AccountPassword        = $motDePasse
-            Enabled                = $true
-            ChangePasswordAtLogon  = $true
-            AccountExpirationDate  = $expirationDate
-            Path                   = $ouBase
-            Description            = "Poste : $($utilisateur.Title) | Service : $($utilisateur.Department) | Import CSV $(Get-Date -Format 'd')"
-            }
-
-New-ADUser @params
-
+        # --- Création du compte (+ PassThru) ---
+        $adUser = New-ADUser @params -PassThru
 
         Write-Host "Création réussie : $($utilisateur.Name)" -ForegroundColor Green
-        Write-Host "  -> Login : $($utilisateur.SamAccountName)" -ForegroundColor Green
+        Write-Host "  -> Login : $sam" -ForegroundColor Green
         Write-Host "  -> Mot de passe initial : $passwordPlain" -ForegroundColor Green
+        Write-Host "  -> Expire le : $($expirationDate.ToShortDateString())" -ForegroundColor Green
 
-        # Ajouter l'utilisateur au groupe correspondant à son service
-        Add-ADGroupMember -Identity $utilisateur.Department -Members $utilisateur.SamAccountName
-        Write-Host "Ajout au groupe '$($utilisateur.Department)' effectué." -ForegroundColor Green
+        # --- Ajout au groupe ---
+        $grp = Get-ADGroup -Filter "Name -eq '$($utilisateur.Department.Trim())'" -ErrorAction SilentlyContinue
+        if ($grp) {
+            Add-ADGroupMember -Identity $grp -Members $adUser
+            Write-Host "Ajout au groupe '$($grp.Name)' effectué." -ForegroundColor Green
+        } else {
+            Write-Host "Groupe '$($utilisateur.Department)' introuvable : pas d'ajout." -ForegroundColor Green
+        }
 
-        # Écriture dans le fichier log
-        $logEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Login: $($utilisateur.SamAccountName) | Mot de passe: $passwordPlain"
+        # --- Log ---
+        $logEntry = "[{0}] Login: {1} | Mot de passe: {2}" -f (Get-Date -f 'yyyy-MM-dd HH:mm:ss'), $sam, $passwordPlain
         Add-Content -Path $logFile -Value $logEntry
     }
     catch {
@@ -144,5 +146,4 @@ New-ADUser @params
 
     Start-Sleep -Seconds 1
 }
-
 Write-Host "Traitement terminé. Consultez le fichier de log : $logFile" -ForegroundColor Cyan
