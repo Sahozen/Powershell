@@ -82,28 +82,31 @@ foreach ($utilisateur in $utilisateurs) {
         $motDePasse = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
 
         # Création du compte utilisateur dans l'Active Directory
-       New-ADUser `
-            -Name              $utilisateur.Name `
-            -DisplayName       $utilisateur.DisplayName `
-            -GivenName         $utilisateur.GivenName `
-            -Surname           $utilisateur.Surname `
-            -SamAccountName    $utilisateur.SamAccountName `
-            -UserPrincipalName $utilisateur.UserPrincipalName `
-            -EmailAddress      $utilisateur.EmailAddress `
-            -Department        $utilisateur.Department `
-            -Title             $utilisateur.Title `
-            -OfficePhone       $utilisateur.TelephoneNumber `
-            -StreetAddress     $utilisateur.StreetAddress `
-            -POBox             $utilisateur.POBox `
-            -PostalCode        $utilisateur.PostalCode `
-            -State             $utilisateur.StateOrProvince `
-            -Country           $utilisateur.Country `
-            -AccountPassword   $motDePasse `
-            -Enabled           $true `
-            -ChangePasswordAtLogon $true `
-            -AccountExpirationDate $expirationDate `         
-            -Path              $ouBase `
-            -Description       "Poste : $($utilisateur.Title) | Service : $($utilisateur.Department) | Import CSV $(Get-Date -Format 'd')"
+       $params = @{
+            Name                   = $utilisateur.Name
+            DisplayName            = $utilisateur.DisplayName
+            GivenName              = $utilisateur.GivenName
+            Surname                = $utilisateur.Surname
+            SamAccountName         = $sam
+            UserPrincipalName      = $utilisateur.UserPrincipalName
+            EmailAddress           = $utilisateur.EmailAddress
+            Department             = $utilisateur.Department
+            Title                  = $utilisateur.Title
+            OfficePhone            = $utilisateur.TelephoneNumber
+            StreetAddress          = $utilisateur.StreetAddress
+            POBox                  = $utilisateur.POBox
+            PostalCode             = $utilisateur.PostalCode
+            State                  = $utilisateur.StateOrProvince
+            Country                = $utilisateur.Country
+            AccountPassword        = $motDePasse
+            Enabled                = $true
+            ChangePasswordAtLogon  = $true
+            AccountExpirationDate  = $expirationDate
+            Path                   = $ouBase
+            Description            = "Poste : $($utilisateur.Title) | Service : $($utilisateur.Department) | Import CSV $(Get-Date -Format 'd')"
+            }
+
+New-ADUser @params
 
 
         Write-Host "Création réussie : $($utilisateur.Name)" -ForegroundColor Green
