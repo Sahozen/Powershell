@@ -101,9 +101,9 @@ foreach ($utilisateur in $utilisateurs) {
             -AccountPassword   $motDePasse `
             -Enabled           $true `
             -ChangePasswordAtLogon $true `
-            -AccountExpirationDate $expirationDate `           # ← nouveau
+            -AccountExpirationDate $expirationDate `         
             -Path              $ouBase `
-            -Description "Poste : $($utilisateur.Title) | Service : $($utilisateur.Department) | Import CSV $(Get-Date -Format 'd')"  # ← modifié
+            -Description       "Poste : $($utilisateur.Title) | Service : $($utilisateur.Department) | Import CSV $(Get-Date -Format 'd')"
 
 
         Write-Host "Création réussie : $($utilisateur.Name)" -ForegroundColor Green
