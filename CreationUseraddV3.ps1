@@ -1,156 +1,96 @@
 <# =====================================================================
 .SYNOPSIS
-    Importation massive d’utilisateurs Active Directory depuis un CSV.
-
+    Importation manuelle d’utilisateurs AD à partir d’un CSV.
 .DESCRIPTION
-    • Sélectionne un fichier CSV (GUI ou -CsvPath),
-    • Crée le compte dans l’OU cible,
-    • Génère un mot de passe complexe + date d’expiration (par défaut +1 an),
-    • Ajoute l’utilisateur au groupe portant le nom de son service (créé si absent),
-    • Journalise dans un fichier texte et/ou JSON,
-    • Affiche une barre de progression et la durée totale d’exécution.
-
+    • Affiche une boîte de dialogue pour choisir le CSV si -CsvPath absent.
+    • Crée le compte dans l’OU cible et génère un mot de passe complexe.
+    • Ajoute l’utilisateur au groupe portant le nom de son service
+      (créé automatiquement si nécessaire).
+    • Journalise chaque action dans un fichier texte basique.
 .EXAMPLE
-    # Mode silencieux (pas de GUI)
-    .\Import-ADUsers.ps1 -CsvPath "C:\temp\nouveaux.csv" -OUBase "OU=Stagiaires,DC=alphatech,DC=local" -ExpirationYears 2
-
-.EXAMPLE
-    # Lancement interactif : une boîte de dialogue vous laisse choisir le CSV
+    # Lancement interactif (GUI)
     .\Import-ADUsers.ps1
+.EXAMPLE
+    # Lancement direct sans GUI
+    .\Import-ADUsers.ps1 -CsvPath "C:\temp\nouveaux.csv"
 ===================================================================== #>
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $false)]
     [string]$CsvPath,
-
-    [string]$OUBase          = 'OU=Utilisateurs,DC=alphatech,DC=local',
-
-    [ValidateRange(1, 10)]
-    [int]$ExpirationYears    = 1,
-
-    [string]$LogFile         = 'O:\Direction\RH\ImportationRH\UserCreationLog.txt',
-
-    [string]$JsonLog,
-
-    [char]$Delimiter         = ';',
-
-    [switch]$NoGui
+    [string]$OUBase = 'OU=Utilisateurs,DC=alphatech,DC=local',
+    [ValidateRange(1,10)]
+    [int]   $ExpirationYears = 1,
+    [string]$LogFile = 'O:\Direction\RH\ImportationRH\UserCreationLog.txt',
+    [char]  $Delimiter = ';'
 )
 
-# ------------------------------ Pré-requis ------------------------------
-# 1. Module RSAT AD obligatoire
-Import-Module ActiveDirectory -ErrorAction Stop
-
-# 2. StrictMode pour assainir la syntaxe
+#----------------------------- Pré-requis ------------------------------
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Import-Module ActiveDirectory -ErrorAction Stop      # RSAT requis
 
-# 3. Vérifie/applique le mode STA quand la GUI est demandée
-if (-not $PSCmdlet.MyInvocation.ExpectingInput -and
-    -not [threading.thread]::CurrentThread.GetApartmentState() -eq 'STA' -and
-    -not $NoGui) {
-
-    Write-Verbose 'Redémarrage du script en STA pour la boîte de dialogue…'
-    & powershell.exe -STA -ExecutionPolicy Bypass `
-        -File $PSCommandPath @PSBoundParameters
+# Redémarrage éventuel en STA pour la GUI
+if (-not [Threading.Thread]::CurrentThread.ApartmentState -eq 'STA' -and -not $CsvPath) {
+    Write-Verbose 'Passage en STA pour la boîte de dialogue…'
+    & powershell.exe -STA -ExecutionPolicy Bypass -File $PSCommandPath @PSBoundParameters
     return
 }
 
-# ------------------------- Fonctions utilitaires ------------------------
-
+#--------------------------- Fonctions ---------------------------------
 function New-RandomPassword {
     param([int]$Length = 16)
-    $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+'
-    -join (1..$Length | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
+    $c = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+'
+    -join (1..$Length | ForEach-Object { $c[(Get-Random -Maximum $c.Length)] })
 }
 
 function Select-CsvFile {
-    if ($NoGui) {
-        throw 'Le paramètre -NoGui est actif sans -CsvPath : impossible de continuer.'
-    }
     Add-Type -AssemblyName System.Windows.Forms
     [Windows.Forms.Application]::EnableVisualStyles()
-
     $dlg = New-Object Windows.Forms.OpenFileDialog
-    $dlg.Title            = 'Sélectionnez un fichier CSV'
-    $dlg.Filter           = 'Fichiers CSV (*.csv)|*.csv|Tous les fichiers (*.*)|*.*'
-    $dlg.InitialDirectory = [Environment]::GetFolderPath('Desktop')
-
-    if ($dlg.ShowDialog() -eq [Windows.Forms.DialogResult]::OK) {
-        return $dlg.FileName
-    }
-    throw 'Opération annulée par utilisateur.'
+    $dlg.Title  = 'Sélectionnez un fichier CSV'
+    $dlg.Filter = 'Fichier CSV (*.csv)|*.csv'
+    if ($dlg.ShowDialog() -eq 'OK') { return $dlg.FileName }
+    throw 'Opération annulée par l’utilisateur.'
 }
 
-function Test-CsvHeaders {
-    param(
-        [string[]]$Headers,
-        [string[]]$Required
-    )
-    $missing = $Required | Where-Object { $_ -notin $Headers }
-    if ($missing) {
-        throw "En-têtes CSV manquants : $($missing -join ', ')"
-    }
+function Write-Log ([string]$Msg,[string]$Lvl='INFO') {
+    '{0} [{1}] {2}' -f (Get-Date -f 'yyyy-MM-dd HH:mm:ss'),$Lvl,$Msg |
+        Add-Content -Path $LogFile
 }
 
-function Write-Log {
-    param(
-        [string]$Message,
-        [ValidateSet('INFO','WARN','ERROR')] [string]$Level = 'INFO'
-    )
-    $stamp = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
-    Add-Content -Path $LogFile -Value "[$stamp][$Level] $Message"
+function Validate-CsvHeaders ($Headers) {
+    $required = 'Name','DisplayName','GivenName','Surname',
+                'SamAccountName','UserPrincipalName','EmailAddress',
+                'Department','Title','TelephoneNumber','StreetAddress',
+                'POBox','PostalCode','StateOrProvince','Country'
+    $missing = $required | Where-Object { $_ -notin $Headers }
+    if ($missing) { throw "En-têtes manquants : $($missing -join ', ')" }
 }
 
-function Write-JsonLog {
-    param($Object)
-    if ($JsonLog) {
-        $Object | ConvertTo-Json -Depth 5 | Add-Content -Path $JsonLog
-    }
-}
-
-# --------------------------- Fonction principale ------------------------
-
+#--------------------------- Import AD ---------------------------------
 function Import-AdUsers {
-    param(
-        [string]$CsvPath,
-        [string]$OUBase,
-        [int]$ExpirationYears
-    )
+    param($Csv)
 
-    Write-Host "`nLecture du fichier CSV : $CsvPath`n" -ForegroundColor Cyan
-    $csv = Import-Csv -Path $CsvPath -Delimiter $Delimiter
-    Test-CsvHeaders -Headers $csv[0].PSObject.Properties.Name -Required @(
-        'Name','DisplayName','GivenName','Surname',
-        'SamAccountName','UserPrincipalName','EmailAddress',
-        'Department','Title','TelephoneNumber','StreetAddress',
-        'POBox','PostalCode','StateOrProvince','Country'
-    )
-
-    $total = $csv.Count
-    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $total = $Csv.Count
+    $sw    = [Diagnostics.Stopwatch]::StartNew()
 
     for ($i = 0; $i -lt $total; $i++) {
-        $u = $csv[$i]
-        Write-Progress -Activity 'Création des comptes AD' `
-                        -Status ("{0}/{1} : {2}" -f ($i+1),$total,$u.SamAccountName) `
-                        -PercentComplete ((($i+1)/$total)*100)
+        $u = $Csv[$i]
+        Write-Progress -Activity 'Import AD' -Status "$($i+1)/$total : $($u.SamAccountName)" `
+            -PercentComplete ((($i+1)/$total)*100)
 
         try {
-            # --- Existence du compte ------------------------------------------------
             if (Get-ADUser -Filter "SamAccountName -eq '$($u.SamAccountName)'" `
-                            -SearchBase $OUBase -ErrorAction SilentlyContinue) {
-                Write-Log "Utilisateur $($u.SamAccountName) déjà existant – ignoré." 'WARN'
-                continue
+                           -SearchBase $OUBase -EA SilentlyContinue) {
+                Write-Log "Déjà existant : $($u.SamAccountName)" 'WARN'; continue
             }
 
-            # --- Préparation des attributs -----------------------------------------
-            $plainPwd  = New-RandomPassword
-            $securePwd = ConvertTo-SecureString $plainPwd -AsPlainText -Force
+            $pwdPlain  = New-RandomPassword
+            $pwdSecure = ConvertTo-SecureString $pwdPlain -AsPlainText -Force
             $expiry    = (Get-Date).AddYears($ExpirationYears)
 
-            $params = @{
+            New-ADUser @{
                 Name                  = $u.Name
                 DisplayName           = $u.DisplayName
                 GivenName             = $u.GivenName
@@ -166,65 +106,44 @@ function Import-AdUsers {
                 PostalCode            = $u.PostalCode
                 State                 = $u.StateOrProvince
                 Country               = $u.Country
-                AccountPassword       = $securePwd
+                AccountPassword       = $pwdSecure
                 Enabled               = $true
                 ChangePasswordAtLogon = $true
                 AccountExpirationDate = $expiry
                 Path                  = $OUBase
-                Description           = "$($u.Title), $($u.Department) • Import CSV"
+                Description           = "$($u.Title), $($u.Department)"
             }
 
-            # --- Création de l’utilisateur -----------------------------------------
-            New-ADUser @params
-
-            # --- Gestion du groupe --------------------------------------------------
-            $grp = Get-ADGroup -Filter "Name -eq '$($u.Department)'" -ErrorAction SilentlyContinue
+            # Groupe (création si absent)
+            $grp = Get-ADGroup -Filter "Name -eq '$($u.Department)'" -EA SilentlyContinue
             if (-not $grp) {
                 $grp = New-ADGroup -Name $u.Department -GroupScope Global -Path $OUBase `
-                                    -Description "Groupe créé automatiquement pour le service $($u.Department)"
-                Write-Log "Groupe $($u.Department) créé." 'INFO'
+                       -Description "Groupe auto ($($u.Department))"
             }
             Add-ADGroupMember -Identity $grp -Members $u.SamAccountName
 
-            # --- Logs ---------------------------------------------------------------
-            Write-Log "Création $($u.SamAccountName) OK (expire $($expiry.ToShortDateString()))"
-            Write-JsonLog @{
-                SamAccountName = $u.SamAccountName
-                Password       = $plainPwd
-                Expires        = $expiry
-                Status         = 'Created'
-            }
+            Write-Log "Créé : $($u.SamAccountName) | exp. $($expiry.ToShortDateString())"
         }
         catch {
-            Write-Log "Erreur pour $($u.SamAccountName) : $_" 'ERROR'
-            Write-JsonLog @{
-                SamAccountName = $u.SamAccountName
-                Error          = $_.Exception.Message
-                Status         = 'Failed'
-            }
-            }
-        
-    
-        $sw.Stop()
-            Write-Host ("`nTraitement terminé en {0}s – consultez :`n -> {1}" `
-                        -f ([math]::Round($sw.Elapsed.TotalSeconds,2)), $LogFile) -ForegroundColor Green
+            Write-Log "Erreur : $($u.SamAccountName) -> $_" 'ERROR'
         }
     }
 
+    $sw.Stop()
+    Write-Host ("`nTerminé en {0}s (voir {1})" -f [math]::Round($sw.Elapsed.TotalSeconds,1),$LogFile) `
+        -ForegroundColor Green
+}
 
-# =========================== MAIN SCRIPT ===============================
+#------------------------------ MAIN ------------------------------------
 try {
-    # Transcription (log détaillé dans %TEMP%)
-    Start-Transcript -Path "$env:TEMP\Import-ADUsers-$(Get-Date -Format yyyyMMdd_HHmmss).log" -NoClobber
+    Start-Transcript -Path "$env:TEMP\ImportAD-$(Get-Date -f yyyyMMdd_HHmmss).log" -NoClobber
 
     if (-not $CsvPath) { $CsvPath = Select-CsvFile }
-
-    # Nettoyage des anciens logs
     if (Test-Path $LogFile) { Remove-Item $LogFile -Force }
-    if ($JsonLog  -and (Test-Path $JsonLog)) { Remove-Item $JsonLog -Force }
 
-    Import-AdUsers -CsvPath $CsvPath -OUBase $OUBase -ExpirationYears $ExpirationYears
+    $csv = Import-Csv -Path $CsvPath -Delimiter $Delimiter
+    Validate-CsvHeaders $csv[0].PSObject.Properties.Name
+
+    Import-AdUsers -Csv $csv
 }
-finally {
-    Stop-Transcript | Out-Null
-}
+finally { Stop-Transcript | Out-Null }
