@@ -24,7 +24,7 @@ function New-RandomPassword {
 $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
 $openFileDialog.Title = "Sélectionnez un fichier CSV"
 $openFileDialog.Filter = "Fichiers CSV (*.csv)|*.csv|Tous les fichiers (*.*)|*.*"
-$openFileDialog.InitialDirectory = "C:\"
+$openFileDialog.InitialDirectory = "O:\Direction\RH\ImportationRH"
 
 $dialogResult = $openFileDialog.ShowDialog()
 
