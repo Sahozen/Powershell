@@ -50,25 +50,25 @@ function New-RandomPassword {
 
 # ----------------------------------------------------------------------------
 function Select-CsvFile {
-    param()
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        [System.Windows.Forms.Application]::EnableVisualStyles()
 
-    if ($NoGui) {
-        throw "Aucun -CsvPath fourni alors que -NoGui est spécifié. Opération annulée."
+        $dlg = New-Object System.Windows.Forms.OpenFileDialog
+        $dlg.Title            = "Sélectionnez un fichier CSV"
+        $dlg.Filter           = "Fichiers CSV (*.csv)|*.csv|Tous les fichiers (*.*)|*.*"
+        $dlg.InitialDirectory = [Environment]::GetFolderPath('Desktop')
+
+        if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+            return $dlg.FileName
+        }
+        throw "Opération annulée par l'utilisateur."
     }
-
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.Application]::EnableVisualStyles()
-
-    $dlg = New-Object System.Windows.Forms.OpenFileDialog
-    $dlg.Title            = "Sélectionnez un fichier CSV"
-    $dlg.Filter           = "Fichiers CSV (*.csv)|*.csv|Tous les fichiers (*.*)|*.*"
-    $dlg.InitialDirectory = [Environment]::GetFolderPath('Desktop')
-
-    switch ($dlg.ShowDialog()) {
-        'OK'    { return $dlg.FileName }
-        default { throw "Opération annulée par l'utilisateur." }
+    catch {
+        throw "Impossible d’ouvrir la boîte de dialogue de sélection : $_"
     }
 }
+
 
 # ----------------------------------------------------------------------------
 function Start-TranscriptSafe {
