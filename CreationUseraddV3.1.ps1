@@ -84,7 +84,7 @@ if ($grp) {
 foreach ($utilisateur in $utilisateurs) {
     try {
         # --- Variables locales ---
-        $sam = $utilisateur.SamAccountName.Trim()
+        $sam            = $utilisateur.SamAccountName.Trim()
         $expirationDate = (Get-Date).AddYears(1)
 
         # --- L'utilisateur existe déjà ? ---
@@ -111,7 +111,7 @@ foreach ($utilisateur in $utilisateurs) {
             PostalCode            = $utilisateur.PostalCode
             State                 = $utilisateur.StateOrProvince
             Country               = $utilisateur.Country
-            AccountPassword       = $motDePasse
+            AccountPassword       = (ConvertTo-SecureString (New-RandomPassword -length 16) -AsPlainText -Force)
             Enabled               = $true
             ChangePasswordAtLogon = $true
             AccountExpirationDate = $expirationDate
@@ -119,12 +119,12 @@ foreach ($utilisateur in $utilisateurs) {
             Description           = "Poste : $($utilisateur.Title) | Service : $($utilisateur.Department) | Import CSV $(Get-Date -Format 'd')"
         }
 
-        # --- Création du compte (+ PassThru) ---
+        # --- Création + récupération de l'objet ---
         $adUser = New-ADUser @params -PassThru
 
-        Write-Host "Création réussie : $($utilisateur.Name)" -ForegroundColor Green
-        Write-Host "  -> Login : $sam" -ForegroundColor Green
-        Write-Host "  -> Mot de passe initial : $passwordPlain" -ForegroundColor Green
+        Write-Host "Création réussie : $($utilisateur.Name)"           -ForegroundColor Green
+        Write-Host "  -> Login : $sam"                                  -ForegroundColor Green
+        Write-Host "  -> Mot de passe initial : (caché)"                -ForegroundColor Green
         Write-Host "  -> Expire le : $($expirationDate.ToShortDateString())" -ForegroundColor Green
 
         # --- Ajout au groupe ---
@@ -137,13 +137,13 @@ foreach ($utilisateur in $utilisateurs) {
         }
 
         # --- Log ---
-        $logEntry = "[{0}] Login: {1} | Mot de passe: {2}" -f (Get-Date -f 'yyyy-MM-dd HH:mm:ss'), $sam, $passwordPlain
+        $logEntry = "[{0}] Login: {1}" -f (Get-Date -f 'yyyy-MM-dd HH:mm:ss'), $sam
         Add-Content -Path $logFile -Value $logEntry
     }
     catch {
         Write-Error "Erreur pour l'utilisateur '$($utilisateur.Name)' : $_"
     }
-
     Start-Sleep -Seconds 1
 }
+
 Write-Host "Traitement terminé. Consultez le fichier de log : $logFile" -ForegroundColor Cyan
