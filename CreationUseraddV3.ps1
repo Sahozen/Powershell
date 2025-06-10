@@ -1,149 +1,128 @@
-<# =====================================================================
-.SYNOPSIS
-    Importation manuelle d’utilisateurs AD à partir d’un CSV.
-.DESCRIPTION
-    • Affiche une boîte de dialogue pour choisir le CSV si -CsvPath absent.
-    • Crée le compte dans l’OU cible et génère un mot de passe complexe.
-    • Ajoute l’utilisateur au groupe portant le nom de son service
-      (créé automatiquement si nécessaire).
-    • Journalise chaque action dans un fichier texte basique.
-.EXAMPLE
-    # Lancement interactif (GUI)
-    .\Import-ADUsers.ps1
-.EXAMPLE
-    # Lancement direct sans GUI
-    .\Import-ADUsers.ps1 -CsvPath "C:\temp\nouveaux.csv"
-===================================================================== #>
+# Import du module Active Directory
+Import-Module ActiveDirectory
 
-[CmdletBinding()]
-param(
-    [string]$CsvPath,
-    [string]$OUBase = 'OU=Utilisateurs,DC=alphatech,DC=local',
-    [ValidateRange(1,10)]
-    [int]   $ExpirationYears = 1,
-    [string]$LogFile = 'O:\Direction\RH\ImportationRH\UserCreationLog.txt',
-    [char]  $Delimiter = ';'
-)
+# Chargement de l'assembly System.Windows.Forms pour l'explorateur de fichiers
+Add-Type -AssemblyName System.Windows.Forms
+[System.Windows.Forms.Application]::EnableVisualStyles()
 
-#----------------------------- Pré-requis ------------------------------
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-Import-Module ActiveDirectory -ErrorAction Stop      # RSAT requis
+# Fonction de génération d'un mot de passe aléatoire
+function New-RandomPassword {
+    param(
+        [int]$length = 16
+    )
+    $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+'
+    $password = -join ((1..$length) | ForEach-Object {
+        $chars[(Get-Random -Minimum 0 -Maximum $chars.Length)]
+    })
+    return $password
+}
 
-# Redémarrage éventuel en STA pour la GUI
-if (-not [Threading.Thread]::CurrentThread.ApartmentState -eq 'STA' -and -not $CsvPath) {
-    Write-Verbose 'Passage en STA pour la boîte de dialogue…'
-    & powershell.exe -STA -ExecutionPolicy Bypass -File $PSCommandPath @PSBoundParameters
+# -------------------------------------------------------------------
+# 1. Sélection du fichier CSV via l'explorateur
+# -------------------------------------------------------------------
+
+$openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+$openFileDialog.Title = "Sélectionnez un fichier CSV"
+$openFileDialog.Filter = "Fichiers CSV (*.csv)|*.csv|Tous les fichiers (*.*)|*.*"
+$openFileDialog.InitialDirectory = "C:\"
+
+$dialogResult = $openFileDialog.ShowDialog()
+
+if ($dialogResult -eq [System.Windows.Forms.DialogResult]::OK) {
+    $cheminCsv = $openFileDialog.FileName
+    Write-Host "Fichier sélectionné : $cheminCsv" -ForegroundColor Cyan
+} else {
+    Write-Warning "Opération annulée par l'utilisateur."
     return
 }
 
-#--------------------------- Fonctions ---------------------------------
-function New-RandomPassword {
-    param([int]$Length = 16)
-    $c = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+'
-    -join (1..$Length | ForEach-Object { $c[(Get-Random -Maximum $c.Length)] })
+# -------------------------------------------------------------------
+# 2. Préparation du fichier de log
+# -------------------------------------------------------------------
+# Horodatage : AAAAMMJJ_HHMM
+$timestamp = Get-Date -Format 'yyyyMMdd_HHmm'
+
+# Chemin du fichier de log (ex. UserCreationLog_20250610_1432.txt)
+$logFile = "O:\Direction\RH\ImportationRH\UserCreationLog_$timestamp.txt"
+
+# Si le fichier log existe déjà, on le supprime pour repartir d'un log vierge
+if (Test-Path $logFile) {
+    Remove-Item $logFile
+    Write-Host "Fichier de log supprimé : $logFile"
 }
 
-function Select-CsvFile {
-    Add-Type -AssemblyName System.Windows.Forms
-    [Windows.Forms.Application]::EnableVisualStyles()
-    $dlg = New-Object Windows.Forms.OpenFileDialog
-    $dlg.Title  = 'Sélectionnez un fichier CSV'
-    $dlg.Filter = 'Fichier CSV (*.csv)|*.csv'
-    if ($dlg.ShowDialog() -eq 'OK') { return $dlg.FileName }
-    throw 'Opération annulée par l’utilisateur.'
-}
+# -------------------------------------------------------------------
+# 3. Paramètres de l'AD
+# -------------------------------------------------------------------
 
-function Write-Log ([string]$Msg,[string]$Lvl='INFO') {
-    '{0} [{1}] {2}' -f (Get-Date -f 'yyyy-MM-dd HH:mm:ss'),$Lvl,$Msg |
-        Add-Content -Path $LogFile
-}
+# OU de destination dans l'AD
+$ouBase = "OU=Utilisateurs,DC=alphatech,DC=local"
 
-function Validate-CsvHeaders ($Headers) {
-    $required = 'Name','DisplayName','GivenName','Surname',
-                'SamAccountName','UserPrincipalName','EmailAddress',
-                'Department','Title','TelephoneNumber','StreetAddress',
-                'POBox','PostalCode','StateOrProvince','Country'
-    $missing = $required | Where-Object { $_ -notin $Headers }
-    if ($missing) { throw "En-têtes manquants : $($missing -join ', ')" }
-}
+# -------------------------------------------------------------------
+# 4. Lecture du CSV et création des utilisateurs
+# -------------------------------------------------------------------
 
-#--------------------------- Import AD ---------------------------------
-function Import-AdUsers {
-    param($Csv)
+$utilisateurs = Import-Csv -Path $cheminCsv
 
-    $total = $Csv.Count
-    $sw    = [Diagnostics.Stopwatch]::StartNew()
+foreach ($utilisateur in $utilisateurs) {
+    try {
+        # Vérifier si l'utilisateur existe déjà
+        $existingUser = Get-ADUser -Filter "SamAccountName -eq '$($utilisateur.SamAccountName)'" `
+                                   -SearchBase $ouBase `
+                                   -SearchScope Subtree `
+                                   -ErrorAction SilentlyContinue
 
-    for ($i = 0; $i -lt $total; $i++) {
-        $u = $Csv[$i]
-        Write-Progress -Activity 'Import AD' -Status "$($i+1)/$total : $($u.SamAccountName)" `
-            -PercentComplete ((($i+1)/$total)*100)
-
-        try {
-            if (Get-ADUser -Filter "SamAccountName -eq '$($u.SamAccountName)'" `
-                           -SearchBase $OUBase -EA SilentlyContinue) {
-                Write-Log "Déjà existant : $($u.SamAccountName)" 'WARN'; continue
-            }
-
-            $pwdPlain  = New-RandomPassword
-            $pwdSecure = ConvertTo-SecureString $pwdPlain -AsPlainText -Force
-            $expiry    = (Get-Date).AddYears($ExpirationYears)
-
-            New-ADUser @{
-                Name                  = $u.Name
-                DisplayName           = $u.DisplayName
-                GivenName             = $u.GivenName
-                Surname               = $u.Surname
-                SamAccountName        = $u.SamAccountName
-                UserPrincipalName     = $u.UserPrincipalName
-                EmailAddress          = $u.EmailAddress
-                Department            = $u.Department
-                Title                 = $u.Title
-                OfficePhone           = $u.TelephoneNumber
-                StreetAddress         = $u.StreetAddress
-                POBox                 = $u.POBox
-                PostalCode            = $u.PostalCode
-                State                 = $u.StateOrProvince
-                Country               = $u.Country
-                AccountPassword       = $pwdSecure
-                Enabled               = $true
-                ChangePasswordAtLogon = $true
-                AccountExpirationDate = $expiry
-                Path                  = $OUBase
-                Description           = "$($u.Title), $($u.Department)"
-            }
-
-            # Groupe (création si absent)
-            $grp = Get-ADGroup -Filter "Name -eq '$($u.Department)'" -EA SilentlyContinue
-            if (-not $grp) {
-                $grp = New-ADGroup -Name $u.Department -GroupScope Global -Path $OUBase `
-                       -Description "Groupe auto ($($u.Department))"
-            }
-            Add-ADGroupMember -Identity $grp -Members $u.SamAccountName
-
-            Write-Log "Créé : $($u.SamAccountName) | exp. $($expiry.ToShortDateString())"
+        if ($existingUser) {
+            Write-Host "L'utilisateur '$($utilisateur.Name)' existe déjà (SamAccountName = $($utilisateur.SamAccountName))." -ForegroundColor Yellow
+            continue
         }
-        catch {
-            Write-Log "Erreur : $($u.SamAccountName) -> $_" 'ERROR'
-        }
+
+        # Génération d'un mot de passe aléatoire
+        $passwordPlain = New-RandomPassword -length 16
+        $motDePasse = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
+
+        # Création du compte utilisateur dans l'Active Directory
+       New-ADUser `
+            -Name              $utilisateur.Name `
+            -DisplayName       $utilisateur.DisplayName `
+            -GivenName         $utilisateur.GivenName `
+            -Surname           $utilisateur.Surname `
+            -SamAccountName    $utilisateur.SamAccountName `
+            -UserPrincipalName $utilisateur.UserPrincipalName `
+            -EmailAddress      $utilisateur.EmailAddress `
+            -Department        $utilisateur.Department `
+            -Title             $utilisateur.Title `
+            -OfficePhone       $utilisateur.TelephoneNumber `
+            -StreetAddress     $utilisateur.StreetAddress `
+            -POBox             $utilisateur.POBox `
+            -PostalCode        $utilisateur.PostalCode `
+            -State             $utilisateur.StateOrProvince `
+            -Country           $utilisateur.Country `
+            -AccountPassword   $motDePasse `
+            -Enabled           $true `
+            -ChangePasswordAtLogon $true `
+            -AccountExpirationDate $expirationDate `           # ← nouveau
+            -Path              $ouBase `
+            -Description "Poste : $($utilisateur.Title) | Service : $($utilisateur.Department) | Import CSV $(Get-Date -Format 'd')"  # ← modifié
+
+
+        Write-Host "Création réussie : $($utilisateur.Name)" -ForegroundColor Green
+        Write-Host "  -> Login : $($utilisateur.SamAccountName)" -ForegroundColor Green
+        Write-Host "  -> Mot de passe initial : $passwordPlain" -ForegroundColor Green
+
+        # Ajouter l'utilisateur au groupe correspondant à son service
+        Add-ADGroupMember -Identity $utilisateur.Department -Members $utilisateur.SamAccountName
+        Write-Host "Ajout au groupe '$($utilisateur.Department)' effectué." -ForegroundColor Green
+
+        # Écriture dans le fichier log
+        $logEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Login: $($utilisateur.SamAccountName) | Mot de passe: $passwordPlain"
+        Add-Content -Path $logFile -Value $logEntry
+    }
+    catch {
+        Write-Error "Erreur pour l'utilisateur '$($utilisateur.Name)' : $_"
     }
 
-    $sw.Stop()
-    Write-Host ("`nTerminé en {0}s (voir {1})" -f [math]::Round($sw.Elapsed.TotalSeconds,1),$LogFile) `
-        -ForegroundColor Green
+    Start-Sleep -Seconds 1
 }
 
-#------------------------------ MAIN ------------------------------------
-try {
-    Start-Transcript -Path "$env:TEMP\ImportAD-$(Get-Date -f yyyyMMdd_HHmmss).log" -NoClobber
-
-    if (-not $CsvPath) { $CsvPath = Select-CsvFile }
-    if (Test-Path $LogFile) { Remove-Item $LogFile -Force }
-
-    $csv = Import-Csv -Path $CsvPath -Delimiter $Delimiter
-    Validate-CsvHeaders $csv[0].PSObject.Properties.Name
-
-    Import-AdUsers -Csv $csv
-}
-finally { Stop-Transcript | Out-Null }
+Write-Host "Traitement terminé. Consultez le fichier de log : $logFile" -ForegroundColor Cyan
